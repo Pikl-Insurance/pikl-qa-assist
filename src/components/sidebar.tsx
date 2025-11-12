@@ -46,6 +46,14 @@ export function Sidebar() {
 
   return (
     <aside className="hidden md:flex w-64 flex-col border-r bg-background">
+      {/* Brand */}
+      <div className="h-14 flex items-center border-b px-6">
+        <Link href="/" className="flex flex-col">
+          <span className="font-bold text-xl leading-none">Pikl</span>
+          <span className="text-xs text-muted-foreground uppercase tracking-wider">QA Assist</span>
+        </Link>
+      </div>
+
       <div className="flex-1 overflow-auto py-6">
         <nav className="grid gap-1 px-4">
           {sidebarNavItems.map((item) => {

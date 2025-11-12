@@ -48,6 +48,11 @@ export interface Analysis {
   coachingRecommendations: string[];
   summary: string;
   callOutcome: string;
+  outcomeMetrics?: {
+    quotesCompleted?: number;
+    salesCompleted?: number;
+    renewalsCompleted?: number;
+  };
   complianceIssues?: (string | ComplianceIssue)[]; // Support both legacy strings and new object format
   processingTime?: number; // ms taken to analyze
 }

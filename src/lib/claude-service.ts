@@ -172,6 +172,10 @@ Additionally, identify:
   - Provide context for why this moment matters for that dimension
   - TRY TO INCLUDE AT LEAST ONE MOMENT FOR EACH OF THE 8 DIMENSIONS
 - **Call Outcome**: Brief description of how the call ended (e.g., "Sale closed", "Follow-up scheduled", "Customer declined")
+- **Outcome Metrics**: Quantifiable outcomes from the call:
+  - quotesCompleted: Number of insurance quotes provided (0, 1, 2, etc.)
+  - salesCompleted: Number of policies sold (0 or 1)
+  - renewalsCompleted: Number of policy renewals completed (0 or 1)
 - **Coaching Recommendations**: 3-5 specific, actionable coaching points for the agent
 - **Compliance Issues**: Any compliance violations or concerns with severity level (minor/moderate/critical), description, and timestamp (empty array if none)
 - **Summary**: 2-3 sentence overall summary of the call
@@ -205,6 +209,11 @@ Respond in the following JSON format (and ONLY JSON, no markdown formatting):
   ],
   "summary": "Agent successfully closed the sale with strong product knowledge. Could improve objection handling and needs discovery.",
   "callOutcome": "Sale closed - customer purchased premium package",
+  "outcomeMetrics": {
+    "quotesCompleted": 1,
+    "salesCompleted": 1,
+    "renewalsCompleted": 0
+  },
   "complianceIssues": []
 }`;
 }
@@ -251,6 +260,11 @@ function parseClaudeResponse(responseText: string): ClaudeAnalysisResponse {
       coachingRecommendations: parsed.coachingRecommendations || [],
       summary: parsed.summary || 'No summary provided',
       callOutcome: parsed.callOutcome || 'Unknown outcome',
+      outcomeMetrics: parsed.outcomeMetrics || {
+        quotesCompleted: 0,
+        salesCompleted: 0,
+        renewalsCompleted: 0,
+      },
       complianceIssues: parsed.complianceIssues || [],
     };
 

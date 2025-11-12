@@ -37,10 +37,11 @@ export function FileUpload({
   const [uploadedCalls, setUploadedCalls] = useState<Array<{ callId: string; filename: string }>>([]);
 
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
+    async (acceptedFiles: File[], rejectedFiles: any[]) => {
       // Clear previous errors
       setErrors([]);
       const newErrors: string[] = [];
+      const duplicateWarnings: string[] = [];
 
       // Handle rejected files
       rejectedFiles.forEach((rejection) => {
@@ -63,6 +64,21 @@ export function FileUpload({
         return;
       }
 
+      // Check for duplicates against existing calls
+      try {
+        const response = await fetch('/api/calls');
+        const existingCalls = await response.json();
+        const existingFilenames = new Set(existingCalls.map((call: any) => call.filename));
+
+        acceptedFiles.forEach((file) => {
+          if (existingFilenames.has(file.name)) {
+            duplicateWarnings.push(`⚠️ ${file.name}: Already uploaded - will skip to avoid duplication`);
+          }
+        });
+      } catch (error) {
+        console.error('Error checking for duplicates:', error);
+      }
+
       // Validate filenames and extract metadata
       const newMetadata = { ...metadata };
       acceptedFiles.forEach((file) => {
@@ -74,8 +90,8 @@ export function FileUpload({
         }
       });
 
-      if (newErrors.length > 0) {
-        setErrors(newErrors);
+      if (newErrors.length > 0 || duplicateWarnings.length > 0) {
+        setErrors([...duplicateWarnings, ...newErrors]);
       }
 
       // Add accepted files
@@ -119,89 +135,84 @@ export function FileUpload({
   const handleUpload = async () => {
     if (files.length === 0) return;
 
-    // Create FormData
-    const formData = new FormData();
-    files.forEach((file) => {
-      formData.append('files', file);
-    });
+    const uploadedCallsList: Array<{ callId: string; filename: string }> = [];
+    const progressUpdates = { ...uploadProgress };
 
-    // Update all files to uploading status
-    const newProgress = { ...uploadProgress };
-    files.forEach((file) => {
-      newProgress[file.name] = { ...newProgress[file.name], status: 'uploading', progress: 0 };
-    });
-    setUploadProgress(newProgress);
+    // Process files one at a time in a queue
+    for (const file of files) {
+      // Update to uploading status
+      progressUpdates[file.name] = { ...progressUpdates[file.name], status: 'uploading', progress: 50 };
+      setUploadProgress({ ...progressUpdates });
 
-    try {
-      // Upload to API
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      try {
+        // Create FormData for single file
+        const formData = new FormData();
+        formData.append('files', file);
 
-      const result = await response.json();
+        // Upload to API
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
 
-      if (result.success) {
-        // Mark files as complete
-        const completeProgress = { ...uploadProgress };
-        files.forEach((file) => {
-          completeProgress[file.name] = {
-            ...completeProgress[file.name],
+        const result = await response.json();
+
+        if (result.success && result.data?.calls && result.data.calls.length > 0) {
+          // Mark file as complete
+          progressUpdates[file.name] = {
+            ...progressUpdates[file.name],
             status: 'complete',
             progress: 100,
           };
-        });
-        setUploadProgress(completeProgress);
+          setUploadProgress({ ...progressUpdates });
 
-        // Store uploaded call IDs for progress tracking
-        if (result.data?.calls) {
-          setUploadedCalls(result.data.calls.map((call: any) => ({
-            callId: call.id,
-            filename: call.filename,
-          })));
-        }
-
-        // Call parent callback if provided
-        if (onUpload) {
-          onUpload(files);
-        }
-
-        // Show success message
-        if (result.data?.errors && result.data.errors.length > 0) {
-          setErrors(result.data.errors);
-        }
-      } else {
-        // Handle error
-        setErrors([result.error || 'Upload failed']);
-
-        // Mark files as error
-        const errorProgress = { ...uploadProgress };
-        files.forEach((file) => {
-          errorProgress[file.name] = {
-            ...errorProgress[file.name],
+          // Add to uploaded calls list
+          uploadedCallsList.push({
+            callId: result.data.calls[0].id,
+            filename: result.data.calls[0].filename,
+          });
+        } else {
+          // Mark file as error
+          progressUpdates[file.name] = {
+            ...progressUpdates[file.name],
             status: 'error',
             progress: 0,
-            error: result.error,
+            error: result.error || 'Upload failed',
           };
-        });
-        setUploadProgress(errorProgress);
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      setErrors(['Network error: Failed to upload files']);
+          setUploadProgress({ ...progressUpdates });
+        }
 
-      // Mark all as error
-      const errorProgress = { ...uploadProgress };
-      files.forEach((file) => {
-        errorProgress[file.name] = {
-          ...errorProgress[file.name],
+        // Small delay between uploads to avoid overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (error) {
+        console.error(`Upload error for ${file.name}:`, error);
+
+        // Mark as error
+        progressUpdates[file.name] = {
+          ...progressUpdates[file.name],
           status: 'error',
           progress: 0,
           error: 'Network error',
         };
-      });
-      setUploadProgress(errorProgress);
+        setUploadProgress({ ...progressUpdates });
+      }
     }
+
+    // Set uploaded calls for progress tracking
+    if (uploadedCallsList.length > 0) {
+      setUploadedCalls(uploadedCallsList);
+
+      // Call parent callback if provided
+      if (onUpload) {
+        onUpload(files);
+      }
+    }
+
+    // Clear files after upload completes
+    setTimeout(() => {
+      setFiles([]);
+    }, 1000);
   };
 
   const formatFileSize = (bytes: number) => {

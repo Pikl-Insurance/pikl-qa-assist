@@ -735,7 +735,8 @@ function CallsContent() {
                                             call.status === 'complete' && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
                                                 href: `/calls/${call.id}`,
                                                 children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
-                                                    variant: "default",
+                                                    variant: "outline",
+                                                    className: "border-primary border-[3px] hover:bg-primary/10",
                                                     children: "View Analysis"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/app/calls/page.tsx",
@@ -780,7 +781,7 @@ function CallsContent() {
                                                 children: "Start Processing"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/app/calls/page.tsx",
-                                                lineNumber: 209,
+                                                lineNumber: 211,
                                                 columnNumber: 21
                                             }, this)
                                         ]
@@ -831,22 +832,22 @@ function CallsPage() {
                 className: "h-8 w-8 animate-spin text-muted-foreground"
             }, void 0, false, {
                 fileName: "[project]/src/app/calls/page.tsx",
-                lineNumber: 255,
+                lineNumber: 257,
                 columnNumber: 9
             }, void 0)
         }, void 0, false, {
             fileName: "[project]/src/app/calls/page.tsx",
-            lineNumber: 254,
+            lineNumber: 256,
             columnNumber: 7
         }, void 0),
         children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(CallsContent, {}, void 0, false, {
             fileName: "[project]/src/app/calls/page.tsx",
-            lineNumber: 258,
+            lineNumber: 260,
             columnNumber: 7
         }, this)
     }, void 0, false, {
         fileName: "[project]/src/app/calls/page.tsx",
-        lineNumber: 253,
+        lineNumber: 255,
         columnNumber: 5
     }, this);
 }

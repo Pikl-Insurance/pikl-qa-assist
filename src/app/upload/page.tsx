@@ -24,25 +24,6 @@ export default function UploadPage() {
         </p>
       </div>
 
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          <strong>File naming convention:</strong> Files should be named as{' '}
-          <code className="text-sm bg-muted px-1 py-0.5 rounded">
-            [LastName, FirstName]_AgentID-Phone_Timestamp(CallID).wav
-          </code>
-          <br />
-          <span className="text-xs text-muted-foreground">
-            Example: [Stevens, Rebecca]_218-07786515254_20251112120634(2367).wav
-          </span>
-          <br />
-          <br />
-          <span className="text-xs text-muted-foreground">
-            <strong>Note:</strong> Files larger than 25MB will be automatically compressed to meet API requirements. Audio quality will remain sufficient for accurate transcription.
-          </span>
-        </AlertDescription>
-      </Alert>
-
       <FileUpload onUpload={handleUpload} />
     </div>
   );

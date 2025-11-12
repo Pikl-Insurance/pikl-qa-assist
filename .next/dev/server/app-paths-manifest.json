@@ -1,13 +1,16 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
   "/agents/page": "app/agents/page.js",
+  "/analytics/page": "app/analytics/page.js",
   "/api/analyze/route": "app/api/analyze/route.js",
   "/api/audio/[id]/route": "app/api/audio/[id]/route.js",
   "/api/calls/[id]/route": "app/api/calls/[id]/route.js",
   "/api/calls/route": "app/api/calls/route.js",
   "/api/stats/route": "app/api/stats/route.js",
   "/api/transcribe/route": "app/api/transcribe/route.js",
+  "/api/upload/route": "app/api/upload/route.js",
   "/calls/[id]/page": "app/calls/[id]/page.js",
   "/calls/page": "app/calls/page.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/upload/page": "app/upload/page.js"
 }

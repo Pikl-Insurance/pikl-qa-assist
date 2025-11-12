@@ -932,10 +932,11 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
     const [errors, setErrors] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])([]);
     const [metadata, setMetadata] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])({});
     const [uploadedCalls, setUploadedCalls] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])([]);
-    const onDrop = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((acceptedFiles, rejectedFiles)=>{
+    const onDrop = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(async (acceptedFiles, rejectedFiles)=>{
         // Clear previous errors
         setErrors([]);
         const newErrors = [];
+        const duplicateWarnings = [];
         // Handle rejected files
         rejectedFiles.forEach((rejection)=>{
             const file = rejection.file;
@@ -955,6 +956,19 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
             setErrors(newErrors);
             return;
         }
+        // Check for duplicates against existing calls
+        try {
+            const response = await fetch('/api/calls');
+            const existingCalls = await response.json();
+            const existingFilenames = new Set(existingCalls.map((call)=>call.filename));
+            acceptedFiles.forEach((file)=>{
+                if (existingFilenames.has(file.name)) {
+                    duplicateWarnings.push(`⚠️ ${file.name}: Already uploaded - will skip to avoid duplication`);
+                }
+            });
+        } catch (error) {
+            console.error('Error checking for duplicates:', error);
+        }
         // Validate filenames and extract metadata
         const newMetadata = {
             ...metadata
@@ -967,8 +981,11 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                 newMetadata[file.name] = parseResult.metadata;
             }
         });
-        if (newErrors.length > 0) {
-            setErrors(newErrors);
+        if (newErrors.length > 0 || duplicateWarnings.length > 0) {
+            setErrors([
+                ...duplicateWarnings,
+                ...newErrors
+            ]);
         }
         // Add accepted files
         const newFiles = [
@@ -1017,96 +1034,86 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
     };
     const handleUpload = async ()=>{
         if (files.length === 0) return;
-        // Create FormData
-        const formData = new FormData();
-        files.forEach((file)=>{
-            formData.append('files', file);
-        });
-        // Update all files to uploading status
-        const newProgress = {
+        const uploadedCallsList = [];
+        const progressUpdates = {
             ...uploadProgress
         };
-        files.forEach((file)=>{
-            newProgress[file.name] = {
-                ...newProgress[file.name],
+        // Process files one at a time in a queue
+        for (const file of files){
+            // Update to uploading status
+            progressUpdates[file.name] = {
+                ...progressUpdates[file.name],
                 status: 'uploading',
-                progress: 0
+                progress: 50
             };
-        });
-        setUploadProgress(newProgress);
-        try {
-            // Upload to API
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
+            setUploadProgress({
+                ...progressUpdates
             });
-            const result = await response.json();
-            if (result.success) {
-                // Mark files as complete
-                const completeProgress = {
-                    ...uploadProgress
-                };
-                files.forEach((file)=>{
-                    completeProgress[file.name] = {
-                        ...completeProgress[file.name],
+            try {
+                // Create FormData for single file
+                const formData = new FormData();
+                formData.append('files', file);
+                // Upload to API
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (result.success && result.data?.calls && result.data.calls.length > 0) {
+                    // Mark file as complete
+                    progressUpdates[file.name] = {
+                        ...progressUpdates[file.name],
                         status: 'complete',
                         progress: 100
                     };
-                });
-                setUploadProgress(completeProgress);
-                // Store uploaded call IDs for progress tracking
-                if (result.data?.calls) {
-                    setUploadedCalls(result.data.calls.map((call)=>({
-                            callId: call.id,
-                            filename: call.filename
-                        })));
-                }
-                // Call parent callback if provided
-                if (onUpload) {
-                    onUpload(files);
-                }
-                // Show success message
-                if (result.data?.errors && result.data.errors.length > 0) {
-                    setErrors(result.data.errors);
-                }
-            } else {
-                // Handle error
-                setErrors([
-                    result.error || 'Upload failed'
-                ]);
-                // Mark files as error
-                const errorProgress = {
-                    ...uploadProgress
-                };
-                files.forEach((file)=>{
-                    errorProgress[file.name] = {
-                        ...errorProgress[file.name],
+                    setUploadProgress({
+                        ...progressUpdates
+                    });
+                    // Add to uploaded calls list
+                    uploadedCallsList.push({
+                        callId: result.data.calls[0].id,
+                        filename: result.data.calls[0].filename
+                    });
+                } else {
+                    // Mark file as error
+                    progressUpdates[file.name] = {
+                        ...progressUpdates[file.name],
                         status: 'error',
                         progress: 0,
-                        error: result.error
+                        error: result.error || 'Upload failed'
                     };
-                });
-                setUploadProgress(errorProgress);
-            }
-        } catch (error) {
-            console.error('Upload error:', error);
-            setErrors([
-                'Network error: Failed to upload files'
-            ]);
-            // Mark all as error
-            const errorProgress = {
-                ...uploadProgress
-            };
-            files.forEach((file)=>{
-                errorProgress[file.name] = {
-                    ...errorProgress[file.name],
+                    setUploadProgress({
+                        ...progressUpdates
+                    });
+                }
+                // Small delay between uploads to avoid overwhelming the server
+                await new Promise((resolve)=>setTimeout(resolve, 500));
+            } catch (error) {
+                console.error(`Upload error for ${file.name}:`, error);
+                // Mark as error
+                progressUpdates[file.name] = {
+                    ...progressUpdates[file.name],
                     status: 'error',
                     progress: 0,
                     error: 'Network error'
                 };
-            });
-            setUploadProgress(errorProgress);
+                setUploadProgress({
+                    ...progressUpdates
+                });
+            }
         }
+        // Set uploaded calls for progress tracking
+        if (uploadedCallsList.length > 0) {
+            setUploadedCalls(uploadedCallsList);
+            // Call parent callback if provided
+            if (onUpload) {
+                onUpload(files);
+            }
+        }
+        // Clear files after upload completes
+        setTimeout(()=>{
+            setFiles([]);
+        }, 1000);
     };
     const formatFileSize = (bytes)=>{
         if (bytes === 0) return '0 Bytes';
@@ -1133,14 +1140,14 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                             ...getInputProps()
                         }, void 0, false, {
                             fileName: "[project]/src/components/file-upload.tsx",
-                            lineNumber: 225,
+                            lineNumber: 236,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$upload$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Upload$3e$__["Upload"], {
                             className: `h-12 w-12 mb-4 ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`
                         }, void 0, false, {
                             fileName: "[project]/src/components/file-upload.tsx",
-                            lineNumber: 226,
+                            lineNumber: 237,
                             columnNumber: 11
                         }, this),
                         isDragActive ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1148,7 +1155,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                             children: "Drop files here"
                         }, void 0, false, {
                             fileName: "[project]/src/components/file-upload.tsx",
-                            lineNumber: 229,
+                            lineNumber: 240,
                             columnNumber: 13
                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Fragment"], {
                             children: [
@@ -1157,7 +1164,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                     children: "Drag and drop WAV files here"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 232,
+                                    lineNumber: 243,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1165,7 +1172,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                     children: "or click to browse your computer"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 235,
+                                    lineNumber: 246,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -1174,7 +1181,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                     children: "Select Files"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 238,
+                                    lineNumber: 249,
                                     columnNumber: 15
                                 }, this)
                             ]
@@ -1186,7 +1193,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                     children: "Maximum file size: 50MB (auto-compressed if needed)"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 245,
+                                    lineNumber: 256,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1196,31 +1203,31 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 246,
+                                    lineNumber: 257,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                     children: "Accepted format: WAV audio files"
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 247,
+                                    lineNumber: 258,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/file-upload.tsx",
-                            lineNumber: 244,
+                            lineNumber: 255,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/file-upload.tsx",
-                    lineNumber: 224,
+                    lineNumber: 235,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/file-upload.tsx",
-                lineNumber: 218,
+                lineNumber: 229,
                 columnNumber: 7
             }, this),
             errors.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$alert$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Alert"], {
@@ -1230,7 +1237,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                         className: "h-4 w-4"
                     }, void 0, false, {
                         fileName: "[project]/src/components/file-upload.tsx",
-                        lineNumber: 255,
+                        lineNumber: 266,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$alert$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["AlertDescription"], {
@@ -1240,23 +1247,23 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                     children: error
                                 }, index, false, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 259,
+                                    lineNumber: 270,
                                     columnNumber: 17
                                 }, this))
                         }, void 0, false, {
                             fileName: "[project]/src/components/file-upload.tsx",
-                            lineNumber: 257,
+                            lineNumber: 268,
                             columnNumber: 13
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/file-upload.tsx",
-                        lineNumber: 256,
+                        lineNumber: 267,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/file-upload.tsx",
-                lineNumber: 254,
+                lineNumber: 265,
                 columnNumber: 9
             }, this),
             files.length > 0 && uploadedCalls.length === 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1274,7 +1281,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/file-upload.tsx",
-                                lineNumber: 270,
+                                lineNumber: 281,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -1285,7 +1292,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                         className: "mr-2 h-4 w-4"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/file-upload.tsx",
-                                        lineNumber: 274,
+                                        lineNumber: 285,
                                         columnNumber: 15
                                     }, this),
                                     "Upload ",
@@ -1295,13 +1302,13 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/file-upload.tsx",
-                                lineNumber: 273,
+                                lineNumber: 284,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/file-upload.tsx",
-                        lineNumber: 269,
+                        lineNumber: 280,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1322,7 +1329,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                         className: "h-5 w-5 text-primary mt-0.5 flex-shrink-0"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                        lineNumber: 288,
+                                                        lineNumber: 299,
                                                         columnNumber: 25
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1333,7 +1340,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                 children: file.name
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                lineNumber: 290,
+                                                                lineNumber: 301,
                                                                 columnNumber: 27
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1341,7 +1348,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                 children: formatFileSize(file.size)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                lineNumber: 291,
+                                                                lineNumber: 302,
                                                                 columnNumber: 27
                                                             }, this),
                                                             meta && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1354,7 +1361,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                 className: "h-3 w-3"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 299,
+                                                                                lineNumber: 310,
                                                                                 columnNumber: 33
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1362,13 +1369,13 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                 children: "Extracted Metadata:"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 300,
+                                                                                lineNumber: 311,
                                                                                 columnNumber: 33
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                        lineNumber: 298,
+                                                                        lineNumber: 309,
                                                                         columnNumber: 31
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1381,7 +1388,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: "Agent:"
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 304,
+                                                                                        lineNumber: 315,
                                                                                         columnNumber: 35
                                                                                     }, this),
                                                                                     ' ',
@@ -1390,13 +1397,13 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: meta.agentName
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 305,
+                                                                                        lineNumber: 316,
                                                                                         columnNumber: 35
                                                                                     }, this)
                                                                                 ]
                                                                             }, void 0, true, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 303,
+                                                                                lineNumber: 314,
                                                                                 columnNumber: 33
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1406,7 +1413,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: "Agent ID:"
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 308,
+                                                                                        lineNumber: 319,
                                                                                         columnNumber: 35
                                                                                     }, this),
                                                                                     ' ',
@@ -1415,13 +1422,13 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: meta.agentId
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 309,
+                                                                                        lineNumber: 320,
                                                                                         columnNumber: 35
                                                                                     }, this)
                                                                                 ]
                                                                             }, void 0, true, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 307,
+                                                                                lineNumber: 318,
                                                                                 columnNumber: 33
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1431,7 +1438,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: "Phone:"
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 312,
+                                                                                        lineNumber: 323,
                                                                                         columnNumber: 35
                                                                                     }, this),
                                                                                     ' ',
@@ -1440,13 +1447,13 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: meta.phoneNumber
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 313,
+                                                                                        lineNumber: 324,
                                                                                         columnNumber: 35
                                                                                     }, this)
                                                                                 ]
                                                                             }, void 0, true, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 311,
+                                                                                lineNumber: 322,
                                                                                 columnNumber: 33
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1456,7 +1463,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: "Call ID:"
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 316,
+                                                                                        lineNumber: 327,
                                                                                         columnNumber: 35
                                                                                     }, this),
                                                                                     ' ',
@@ -1465,25 +1472,25 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                         children: meta.callId
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                                        lineNumber: 317,
+                                                                                        lineNumber: 328,
                                                                                         columnNumber: 35
                                                                                     }, this)
                                                                                 ]
                                                                             }, void 0, true, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 315,
+                                                                                lineNumber: 326,
                                                                                 columnNumber: 33
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                        lineNumber: 302,
+                                                                        lineNumber: 313,
                                                                         columnNumber: 31
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                lineNumber: 297,
+                                                                lineNumber: 308,
                                                                 columnNumber: 29
                                                             }, this),
                                                             progress && progress.status !== 'pending' && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1493,7 +1500,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                         value: progress.progress
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                        lineNumber: 325,
+                                                                        lineNumber: 336,
                                                                         columnNumber: 31
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1504,38 +1511,38 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                                                 children: progress.status
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 327,
+                                                                                lineNumber: 338,
                                                                                 columnNumber: 33
                                                                             }, this),
                                                                             progress.status === 'complete' && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$circle$2d$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__CheckCircle2$3e$__["CheckCircle2"], {
                                                                                 className: "h-4 w-4 text-green-600"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                                lineNumber: 339,
+                                                                                lineNumber: 350,
                                                                                 columnNumber: 35
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                                        lineNumber: 326,
+                                                                        lineNumber: 337,
                                                                         columnNumber: 31
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                                lineNumber: 324,
+                                                                lineNumber: 335,
                                                                 columnNumber: 29
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/file-upload.tsx",
-                                                        lineNumber: 289,
+                                                        lineNumber: 300,
                                                         columnNumber: 25
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                lineNumber: 287,
+                                                lineNumber: 298,
                                                 columnNumber: 23
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -1547,40 +1554,40 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                                                     className: "h-4 w-4"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/file-upload.tsx",
-                                                    lineNumber: 353,
+                                                    lineNumber: 364,
                                                     columnNumber: 25
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/file-upload.tsx",
-                                                lineNumber: 347,
+                                                lineNumber: 358,
                                                 columnNumber: 23
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/file-upload.tsx",
-                                        lineNumber: 286,
+                                        lineNumber: 297,
                                         columnNumber: 21
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/file-upload.tsx",
-                                    lineNumber: 285,
+                                    lineNumber: 296,
                                     columnNumber: 19
                                 }, this)
                             }, file.name, false, {
                                 fileName: "[project]/src/components/file-upload.tsx",
-                                lineNumber: 284,
+                                lineNumber: 295,
                                 columnNumber: 17
                             }, this);
                         })
                     }, void 0, false, {
                         fileName: "[project]/src/components/file-upload.tsx",
-                        lineNumber: 279,
+                        lineNumber: 290,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/file-upload.tsx",
-                lineNumber: 268,
+                lineNumber: 279,
                 columnNumber: 9
             }, this),
             uploadedCalls.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1591,7 +1598,7 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                         children: "Processing Status"
                     }, void 0, false, {
                         fileName: "[project]/src/components/file-upload.tsx",
-                        lineNumber: 367,
+                        lineNumber: 378,
                         columnNumber: 11
                     }, this),
                     uploadedCalls.map((call)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$upload$2d$progress$2d$tracker$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["UploadProgressTracker"], {
@@ -1603,19 +1610,19 @@ function FileUpload({ maxFiles = MAX_FILES, maxSize = MAX_FILE_SIZE, onUpload })
                             }
                         }, call.callId, false, {
                             fileName: "[project]/src/components/file-upload.tsx",
-                            lineNumber: 369,
+                            lineNumber: 380,
                             columnNumber: 13
                         }, this))
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/file-upload.tsx",
-                lineNumber: 366,
+                lineNumber: 377,
                 columnNumber: 9
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/file-upload.tsx",
-        lineNumber: 216,
+        lineNumber: 227,
         columnNumber: 5
     }, this);
 }
@@ -1629,11 +1636,7 @@ __turbopack_context__.s([
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime.js [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$file$2d$upload$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/components/file-upload.tsx [app-ssr] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$alert$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/components/ui/alert.tsx [app-ssr] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$info$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Info$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/info.js [app-ssr] (ecmascript) <export default as Info>");
 'use client';
-;
-;
 ;
 ;
 function UploadPage() {
@@ -1672,91 +1675,11 @@ function UploadPage() {
                 lineNumber: 20,
                 columnNumber: 7
             }, this),
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$alert$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Alert"], {
-                children: [
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$info$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Info$3e$__["Info"], {
-                        className: "h-4 w-4"
-                    }, void 0, false, {
-                        fileName: "[project]/src/app/upload/page.tsx",
-                        lineNumber: 28,
-                        columnNumber: 9
-                    }, this),
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$alert$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["AlertDescription"], {
-                        children: [
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("strong", {
-                                children: "File naming convention:"
-                            }, void 0, false, {
-                                fileName: "[project]/src/app/upload/page.tsx",
-                                lineNumber: 30,
-                                columnNumber: 11
-                            }, this),
-                            " Files should be named as",
-                            ' ',
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("code", {
-                                className: "text-sm bg-muted px-1 py-0.5 rounded",
-                                children: "[LastName, FirstName]_AgentID-Phone_Timestamp(CallID).wav"
-                            }, void 0, false, {
-                                fileName: "[project]/src/app/upload/page.tsx",
-                                lineNumber: 31,
-                                columnNumber: 11
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("br", {}, void 0, false, {
-                                fileName: "[project]/src/app/upload/page.tsx",
-                                lineNumber: 34,
-                                columnNumber: 11
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                className: "text-xs text-muted-foreground",
-                                children: "Example: [Stevens, Rebecca]_218-07786515254_20251112120634(2367).wav"
-                            }, void 0, false, {
-                                fileName: "[project]/src/app/upload/page.tsx",
-                                lineNumber: 35,
-                                columnNumber: 11
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("br", {}, void 0, false, {
-                                fileName: "[project]/src/app/upload/page.tsx",
-                                lineNumber: 38,
-                                columnNumber: 11
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("br", {}, void 0, false, {
-                                fileName: "[project]/src/app/upload/page.tsx",
-                                lineNumber: 39,
-                                columnNumber: 11
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                className: "text-xs text-muted-foreground",
-                                children: [
-                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("strong", {
-                                        children: "Note:"
-                                    }, void 0, false, {
-                                        fileName: "[project]/src/app/upload/page.tsx",
-                                        lineNumber: 41,
-                                        columnNumber: 13
-                                    }, this),
-                                    " Files larger than 25MB will be automatically compressed to meet API requirements. Audio quality will remain sufficient for accurate transcription."
-                                ]
-                            }, void 0, true, {
-                                fileName: "[project]/src/app/upload/page.tsx",
-                                lineNumber: 40,
-                                columnNumber: 11
-                            }, this)
-                        ]
-                    }, void 0, true, {
-                        fileName: "[project]/src/app/upload/page.tsx",
-                        lineNumber: 29,
-                        columnNumber: 9
-                    }, this)
-                ]
-            }, void 0, true, {
-                fileName: "[project]/src/app/upload/page.tsx",
-                lineNumber: 27,
-                columnNumber: 7
-            }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$file$2d$upload$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["FileUpload"], {
                 onUpload: handleUpload
             }, void 0, false, {
                 fileName: "[project]/src/app/upload/page.tsx",
-                lineNumber: 46,
+                lineNumber: 27,
                 columnNumber: 7
             }, this)
         ]

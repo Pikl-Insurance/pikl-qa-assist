@@ -202,7 +202,9 @@ function CallsContent() {
                 <div className="flex gap-2">
                   {call.status === 'complete' && (
                     <Link href={`/calls/${call.id}`}>
-                      <Button variant="default">View Analysis</Button>
+                      <Button variant="outline" className="border-primary border-[3px] hover:bg-primary/10">
+                        View Analysis
+                      </Button>
                     </Link>
                   )}
                   {call.status === 'pending' && (

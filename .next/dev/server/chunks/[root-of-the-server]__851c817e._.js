@@ -255,9 +255,22 @@ async function readCalls() {
         throw error;
     }
 }
+// Mutex lock for preventing concurrent writes
+let writeQueue = Promise.resolve();
 async function writeCalls(calls) {
-    await ensureDirectories();
-    await __TURBOPACK__imported__module__$5b$externals$5d2f$fs$2f$promises__$5b$external$5d$__$28$fs$2f$promises$2c$__cjs$29$__["default"].writeFile(CALLS_FILE, JSON.stringify(calls, null, 2), 'utf-8');
+    // Wait for any pending writes to complete
+    await writeQueue;
+    // Queue this write operation
+    writeQueue = (async ()=>{
+        try {
+            await ensureDirectories();
+            await __TURBOPACK__imported__module__$5b$externals$5d2f$fs$2f$promises__$5b$external$5d$__$28$fs$2f$promises$2c$__cjs$29$__["default"].writeFile(CALLS_FILE, JSON.stringify(calls, null, 2), 'utf-8');
+        } catch (error) {
+            console.error('[STORAGE] Failed to write calls:', error);
+            throw error;
+        }
+    })();
+    await writeQueue;
 }
 async function addCall(call) {
     const calls = await readCalls();

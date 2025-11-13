@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCallById, updateCall, getUploadPath, saveTranscript, saveTranscriptAsText } from '@/lib/storage';
-import { transcribeAudio, formatTranscriptAsText, estimateTranscriptionCost } from '@/lib/whisper-service';
+import * as WhisperService from '@/lib/whisper-service';
+import * as AssemblyAIService from '@/lib/assemblyai-service';
 import type { ApiResponse, Transcript } from '@/types';
+
+type TranscriptionProvider = 'whisper' | 'assemblyai';
 
 /**
  * POST /api/transcribe
@@ -10,7 +13,7 @@ import type { ApiResponse, Transcript } from '@/types';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { callId } = body;
+    const { callId, provider = 'whisper' as TranscriptionProvider } = body;
 
     if (!callId) {
       return NextResponse.json<ApiResponse<null>>(
@@ -19,6 +22,28 @@ export async function POST(req: NextRequest) {
           error: 'Call ID is required',
         },
         { status: 400 }
+      );
+    }
+
+    // Validate provider
+    if (provider !== 'whisper' && provider !== 'assemblyai') {
+      return NextResponse.json<ApiResponse<null>>(
+        {
+          success: false,
+          error: 'Invalid provider. Must be "whisper" or "assemblyai"',
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check API key for AssemblyAI
+    if (provider === 'assemblyai' && !process.env.ASSEMBLYAI_API_KEY) {
+      return NextResponse.json<ApiResponse<null>>(
+        {
+          success: false,
+          error: 'AssemblyAI API key not configured',
+        },
+        { status: 500 }
       );
     }
 
@@ -73,18 +98,28 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // Transcribe audio
-      const transcript = await transcribeAudio(audioPath, callId);
+      // Select transcription service based on provider
+      let transcript: Transcript;
+      let textContent: string;
+      let cost: number;
+
+      if (provider === 'assemblyai') {
+        console.log('[TRANSCRIBE] Using AssemblyAI for transcription + diarization');
+        transcript = await AssemblyAIService.transcribeAudio(audioPath, callId);
+        textContent = AssemblyAIService.formatTranscriptAsText(transcript);
+        cost = AssemblyAIService.estimateTranscriptionCost(transcript.durationSeconds);
+      } else {
+        console.log('[TRANSCRIBE] Using Whisper (OpenAI) for transcription + heuristic diarization');
+        transcript = await WhisperService.transcribeAudio(audioPath, callId);
+        textContent = WhisperService.formatTranscriptAsText(transcript);
+        cost = WhisperService.estimateTranscriptionCost(transcript.durationSeconds);
+      }
 
       // Save transcript as JSON
       await saveTranscript(transcript);
 
       // Save transcript as plain text
-      const textContent = formatTranscriptAsText(transcript);
       await saveTranscriptAsText(callId, textContent);
-
-      // Estimate cost
-      const cost = estimateTranscriptionCost(transcript.durationSeconds);
 
       // Update call record
       await updateCall(callId, {
@@ -100,14 +135,15 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ callId }),
       }).catch((err) => console.error('Failed to trigger analysis:', err));
 
-      return NextResponse.json<ApiResponse<{ transcript: Transcript; cost: number }>>(
+      return NextResponse.json<ApiResponse<{ transcript: Transcript; cost: number; provider: string }>>(
         {
           success: true,
           data: {
             transcript,
             cost,
+            provider,
           },
-          message: `Successfully transcribed call in ${Math.floor(transcript.processingTime! / 1000)}s. Cost: $${cost.toFixed(4)}`,
+          message: `Successfully transcribed call with ${provider === 'assemblyai' ? 'AssemblyAI' : 'Whisper'} in ${Math.floor(transcript.processingTime! / 1000)}s. Cost: $${cost.toFixed(4)}`,
         },
         { status: 200 }
       );

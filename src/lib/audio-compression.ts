@@ -38,57 +38,30 @@ export async function compressAudioIfNeeded(
 
     console.log(`[COMPRESSION] ⚠ File exceeds limit by ${formatBytes(originalSize - MAX_FILE_SIZE)}, starting compression...`);
 
-    // Create temporary output path
-    const outputPath = inputPath.replace('.wav', '_compressed.wav');
+    // Create output path with .mp3 extension
+    // AssemblyAI and Whisper both support MP3, so keep it as MP3 (much smaller than WAV)
+    const outputPath = inputPath.replace(/\.(wav|m4a|mp3)$/i, '_compressed.mp3');
 
-    // FFmpeg command to compress:
-    // - Convert to mono (reduces size by ~50% if stereo)
-    // - Sample rate: 16kHz (sufficient for speech recognition)
-    // - Use MP3 for intermediate compression, then convert back to WAV for Whisper
-    const tempMp3 = inputPath.replace('.wav', '_temp.mp3');
-
-    // Step 1: Compress to MP3 (very efficient)
-    // Use 32kbps for aggressive compression - perfect for speech
-    console.log(`[COMPRESSION] Step 1: Converting to MP3 at 32kbps...`);
+    // Compress to MP3 (very efficient for speech)
+    // Use 32kbps for aggressive compression - perfect for speech (~3.8MB per minute)
+    console.log(`[COMPRESSION] Converting to MP3 at 32kbps...`);
     const mp3Command = [
       'ffmpeg',
       '-i', `"${inputPath}"`,
-      '-ar', '16000',           // Sample rate: 16kHz
-      '-ac', '1',               // Mono audio
-      '-b:a', '32k',            // Bit rate: 32kbps (very efficient for speech, ~3.8MB per minute)
+      '-ar', '16000',           // Sample rate: 16kHz (sufficient for speech)
+      '-ac', '1',               // Mono audio (reduces size by ~50% if stereo)
+      '-b:a', '32k',            // Bit rate: 32kbps
       '-y',
-      `"${tempMp3}"`
+      `"${outputPath}"`
     ].join(' ');
 
     console.log(`[COMPRESSION] Running: ${mp3Command}`);
     await execAsync(mp3Command);
 
-    const mp3Stats = await fs.stat(tempMp3);
-    console.log(`[COMPRESSION] ✓ MP3 created: ${formatBytes(mp3Stats.size)}`);
-
-    // Step 2: Convert back to WAV for Whisper API
-    console.log(`[COMPRESSION] Step 2: Converting MP3 back to WAV...`);
-    const wavCommand = [
-      'ffmpeg',
-      '-i', `"${tempMp3}"`,
-      '-ar', '16000',
-      '-ac', '1',
-      '-sample_fmt', 's16',
-      '-y',
-      `"${outputPath}"`
-    ].join(' ');
-
-    console.log(`[COMPRESSION] Running: ${wavCommand}`);
-    await execAsync(wavCommand);
-
     // Check compressed file size
     const compressedStats = await fs.stat(outputPath);
     const finalSize = compressedStats.size;
-    console.log(`[COMPRESSION] ✓ Final WAV created: ${formatBytes(finalSize)} (${finalSize} bytes)`);
-
-    // Clean up temp MP3
-    await fs.unlink(tempMp3).catch(() => {});
-    console.log(`[COMPRESSION] ✓ Temp MP3 cleaned up`);
+    console.log(`[COMPRESSION] ✓ MP3 created: ${formatBytes(finalSize)} (${finalSize} bytes)`);
 
     const reductionPercent = ((1 - finalSize / originalSize) * 100).toFixed(1);
     console.log(

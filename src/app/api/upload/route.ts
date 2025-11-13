@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseCallFilename } from '@/lib/metadata-parser';
 import { addCall, saveUploadedFile, generateCallId } from '@/lib/storage';
-import { compressAudioIfNeeded, formatBytes } from '@/lib/audio-compression';
 import type { Call, ApiResponse } from '@/types';
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB upload limit (will compress to 25MB if needed)
-const WHISPER_LIMIT = 25 * 1024 * 1024; // 25MB OpenAI Whisper API limit
-const ALLOWED_MIME_TYPES = ['audio/wav', 'audio/x-wav', 'audio/wave'];
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB upload limit (AssemblyAI supports up to 5GB)
+const ALLOWED_MIME_TYPES = ['audio/wav', 'audio/x-wav', 'audio/wave', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a'];
 
 /**
  * POST /api/upload
@@ -59,24 +57,15 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(arrayBuffer);
 
         // Save file to uploads directory
-        let savedPath = await saveUploadedFile(buffer, file.name);
+        const savedPath = await saveUploadedFile(buffer, file.name);
 
-        // Compress audio if it exceeds Whisper API limit
-        const compressionResult = await compressAudioIfNeeded(savedPath, file.name);
-        let physicalFilename = file.name; // The actual file on disk
-
-        if (compressionResult.compressed) {
-          savedPath = compressionResult.path;
-          physicalFilename = savedPath.split('/').pop() || file.name;
-          console.log(
-            `Compressed ${file.name}: ${formatBytes(compressionResult.originalSize)} → ${formatBytes(compressionResult.finalSize)}`
-          );
-        }
+        // No compression needed - AssemblyAI supports files up to 5GB
+        // Whisper's 25MB limit is no longer relevant since we use AssemblyAI by default
 
         // Create call record
         const call: Call = {
           id: generateCallId(),
-          filename: physicalFilename, // Store the actual physical filename
+          filename: file.name, // Original filename
           agentName: metadata.agentName,
           agentId: metadata.agentId,
           phoneNumber: metadata.phoneNumber,
@@ -93,10 +82,14 @@ export async function POST(req: NextRequest) {
         uploadedCalls.push(savedCall);
 
         // Trigger transcription asynchronously (don't wait)
+        // Use AssemblyAI by default for better speaker diarization
         fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/transcribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ callId: savedCall.id }),
+          body: JSON.stringify({
+            callId: savedCall.id,
+            provider: 'assemblyai' // Use AssemblyAI for superior diarization
+          }),
         }).catch((err) => console.error('Failed to trigger transcription:', err));
       } catch (fileError) {
         errors.push(`${file.name}: ${(fileError as Error).message}`);

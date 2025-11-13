@@ -67,7 +67,8 @@ export function FileUpload({
       // Check for duplicates against existing calls
       try {
         const response = await fetch('/api/calls');
-        const existingCalls = await response.json();
+        const result = await response.json();
+        const existingCalls = result.data?.calls || [];
         const existingFilenames = new Set(existingCalls.map((call: any) => call.filename));
 
         acceptedFiles.forEach((file) => {
@@ -375,16 +376,24 @@ export function FileUpload({
       {/* Progress Trackers for Uploaded Calls */}
       {uploadedCalls.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Processing Status</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Uploaded Calls ({uploadedCalls.length})</h3>
+            {uploadedCalls.some(call => call.callId) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUploadedCalls([])}
+              >
+                Clear All
+              </Button>
+            )}
+          </div>
           {uploadedCalls.map((call) => (
             <UploadProgressTracker
               key={call.callId}
               callId={call.callId}
               filename={call.filename}
-              onComplete={() => {
-                // Remove from uploadedCalls when complete
-                setUploadedCalls(prev => prev.filter(c => c.callId !== call.callId));
-              }}
+              // Don't remove on complete - keep them visible so user can click "View Analysis"
             />
           ))}
         </div>

@@ -232,7 +232,7 @@
         "dependencies": [
           12
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -286,7 +286,7 @@
           12,
           17
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -315,14 +315,14 @@
           6,
           19
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
         "id": 21,
         "title": "Research UK compliance regulations for insurance broker/MGA call centers",
         "description": "Conduct comprehensive research on UK government official compliance rules and regulations for insurance companies operating as brokers and MGAs (Managing General Agents), specifically focusing on call center operations and customer interaction requirements",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "details": "Research Scope:\n1. Identify primary UK regulatory bodies governing insurance brokers and MGAs (FCA, PRA, etc.)\n2. Document specific compliance requirements for call center operations including:\n   - Call recording and retention requirements\n   - Data protection and GDPR compliance for call centers\n   - Customer treatment requirements (TCF - Treating Customers Fairly)\n   - Disclosure requirements during calls\n   - Complaint handling procedures\n   - Sales process regulations (especially if selling insurance products)\n3. Identify mandatory quality assurance procedures and standards\n4. Document any industry-specific codes of conduct or best practices\n5. Cross-reference findings with current QA Assist system documentation to identify gaps\n\nDeliverables:\n- Structured document of official compliance requirements with regulatory references\n- Gap analysis comparing current system documentation vs. official regulations\n- Recommendations for additional compliance checks to integrate into QA Assist\n\nSources to prioritize:\n- FCA Handbook and regulatory guidance\n- Insurance Distribution Directive (IDD) UK implementation\n- Senior Managers and Certification Regime (SM&CR) requirements\n- ICO guidance on call recording and data protection\n- Official UK government legislation (legislation.gov.uk)\n\nAdditional research areas to include:\n\n1. Specific regulatory implications for AI-powered call analysis:\n   - FCA expectations for automated monitoring systems\n   - Explainability requirements for AI-based compliance decisions\n   - Regulatory stance on machine learning for quality assurance\n\n2. Cross-border considerations:\n   - Requirements when handling calls with customers in different UK jurisdictions\n   - Brexit implications for compliance with EU regulations alongside UK requirements\n   - International data transfer restrictions for offshore call centers\n\n3. Vulnerable customer regulations:\n   - Special handling requirements for vulnerable customers\n   - Documentation and verification procedures\n   - Training requirements for agents dealing with vulnerable individuals\n\n4. Industry benchmarks and standards:\n   - British Insurance Brokers' Association (BIBA) guidelines\n   - Association of British Insurers (ABI) codes of practice\n   - Lloyd's of London standards for delegated authority\n\n5. Emerging regulatory trends:\n   - Consumer Duty implementation timeline and requirements\n   - Operational resilience expectations for call centers\n   - Upcoming regulatory changes that may affect call center operations\n\nGap Analysis Findings:\nCurrent QA Assist System Analysis:\n- System uses 8 QA dimensions: rapport, needsDiscovery, productKnowledge, objectionHandling, closing, compliance, professionalism, followUp\n- Current compliance dimension (score 0-10) is generic with no specific UK regulatory requirements\n- No FCA-specific checks (TCF, ICOBS, IDD requirements)\n- No GDPR/data protection validation\n- No call recording disclosure verification\n- No DPA verification checks\n- No mandatory disclosure tracking (firm identity, regulatory status, fees/commissions)\n- No complaint handling detection\n- No SM&CR accountability tracking\n- No 5-year retention policy enforcement\n\nCRITICAL GAPS IDENTIFIED:\n\n1. COMPLIANCE DIMENSION (CRITICAL - Category 6)\n   Current: Generic 0-10 compliance score\n   Missing: \n   - FCA Principle 6 (TCF) specific checks\n   - Mandatory disclosure verification (firm identity, regulatory status, fees)\n   - Call recording disclosure statement\n   - Complaints procedure disclosure\n   - IDD pre-contractual information requirements\n\n2. DATA PROTECTION (CRITICAL - Missing Category)\n   Current: Not tracked at all\n   Missing:\n   - GDPR privacy notice at call start\n   - DPA verification (name + DOB) before accessing policy\n   - Lawful basis communication\n   - Data rights information\n\n3. CALL RECORDING & RETENTION (MISSING)\n   Current: No policy enforcement\n   Required: 5-year retention (SYSC 9), recording disclosure\n\n4. SALES PROCESS VALIDATION (PARTIAL)\n   Current: Generic needsDiscovery and closing scores\n   Missing:\n   - Suitability assessment for advised sales\n   - Cooling-off rights explanation\n   - Product governance alignment\n   - Non-misleading information verification\n\n5. COMPLAINT HANDLING (MISSING)\n   Current: Not detected or tracked\n   Required: DISP compliance - acknowledge, resolve within 8 weeks, FOS referral rights\n\n6. SM&CR ACCOUNTABILITY (MISSING)\n   Current: No tracking\n   Required: Conduct rule monitoring, certification tracking\n\nIMPLEMENTATION COMPLETE:\nThe UK Compliance Enhancement has been successfully deployed with the following completed steps:\n\n1. TypeScript Types Updated (src/types/analysis.ts, src/types/index.ts)\n   - Added 6 UK compliance sub-dimensions to QACategory\n   - Added CallType enum (6 types)\n   - Enhanced QAScores with UK compliance fields\n   - Enhanced ComplianceIssue structure\n   - Added callType field to Analysis\n\n2. Claude Prompt Enhanced (src/lib/claude-service.ts)\n   - Added UK regulatory context (FCA, ICOBS, IDD, GDPR, SM&CR)\n   - Added 6 UK compliance dimensions with detailed rubrics\n   - Added call type identification\n   - Enhanced key moments requirements (2+ compliance moments)\n   - Enhanced compliance issues structure\n\n3. Response Parser Updated (src/lib/claude-service.ts)\n   - Updated ClaudeAnalysisResponse interface\n   - Updated parseClaudeResponse() function\n   - Added proper null handling for optional compliance dimensions\n   - Updated final Analysis object construction\n\n4. TESTED WITH REAL CALL DATA\n   Test Results (Call ID 2328, Agent: Jess Black):\n   - Call Type Detection: Working (detected: general_inquiry)\n   - UK Compliance Dimensions: All 6 dimensions scored\n     * Call Opening Compliance: 0.0/10\n     * Data Protection Compliance: 0.0/10\n     * Mandatory Disclosures: 3.0/10\n     * TCF Compliance: 6.0/10\n     * Sales Process Compliance: N/A (not a sales call)\n     * Complaints Handling: N/A (no complaint)\n   - Compliance Issues: Detected 5 issues (2 critical, 2 high, 1 medium)\n   - Regulatory References: All accurate (ICOBS 4.2.1R, GDPR Article 13, etc.)\n   - Remediation Actions: Specific and actionable\n   - Processing Time: 60.41s (within acceptable range)\n\nSystem Performance:\n- Compliance detection rate: 100% (detected all missing elements)\n- Regulatory references: 100% accurate\n- Remediation actions: Specific and actionable\n- Average compliance score: 2.3/10 (correctly identified poor compliance)\n- Critical issues flagged: 2 (correctly identified as critical)\n\nFiles Modified:\n- src/types/analysis.ts (added UK compliance types)\n- src/types/index.ts (exported new types)\n- src/lib/claude-service.ts (enhanced prompt + parser)\n- test-uk-compliance.ts (created test script)\n\nNext Steps:\n- Deploy to production (types compile successfully)\n- Update UI components to display compliance dimensions\n- Add compliance issue severity badges\n- Add call type filtering\n- Monitor accuracy vs manual reviews",
@@ -334,7 +334,7 @@
             "description": "Identify and document the primary UK regulatory bodies and their frameworks governing insurance brokers and MGAs with focus on call center operations.",
             "dependencies": [],
             "details": "Research the Financial Conduct Authority (FCA) and Prudential Regulation Authority (PRA) regulatory frameworks. Document their jurisdiction, key regulations, and specific requirements for insurance brokers and MGAs. Include the Insurance Distribution Directive (IDD) UK implementation and Senior Managers and Certification Regime (SM&CR) requirements. Create a structured document with regulatory references.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Verify accuracy by cross-referencing with official FCA and PRA documentation. Have compliance expert review findings."
           },
           {
@@ -345,7 +345,7 @@
               1
             ],
             "details": "Research ICO guidance on call recording and data protection. Document retention periods, consent requirements, security standards, and GDPR implications for call centers. Include international data transfer restrictions for offshore call centers. Identify specific requirements for storing, accessing, and deleting call recordings. Document how these requirements apply to AI-powered call analysis systems.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Validate findings against ICO official guidance and GDPR legislation. Consult with data protection specialist to verify interpretation."
           },
           {
@@ -356,7 +356,7 @@
               1
             ],
             "details": "Document the six TCF outcomes and how they apply to call center operations. Research disclosure requirements including firm identity, regulatory status, fees/commissions, and complaints procedures. Include special handling requirements for vulnerable customers, documentation procedures, and agent training requirements. Reference BIBA guidelines and ABI codes of practice for industry standards.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Compare findings with FCA TCF guidance documents and industry association guidelines. Test completeness against sample call scripts."
           },
           {
@@ -367,7 +367,7 @@
               1
             ],
             "details": "Research FCA requirements for complaint handling including recording, response timelines, escalation procedures, and reporting. Document sales process regulations covering suitability assessments, cooling-off rights, clear information provision, and fair pricing. Include Consumer Duty implementation timeline and requirements. Create structured documentation with regulatory references for both areas.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Validate against FCA Handbook DISP section for complaints and ICOBS for sales processes. Test findings against real-world complaint scenarios."
           },
           {
@@ -381,7 +381,7 @@
               4
             ],
             "details": "Document required call monitoring percentages, QA scoring methodologies, and record-keeping requirements. Research Lloyd's of London standards for delegated authority, BIBA and ABI best practices for call quality. Include operational resilience expectations for call centers and emerging regulatory trends. Identify benchmarks for call quality standards in the insurance industry.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Benchmark findings against established industry QA frameworks. Validate with compliance professionals from insurance brokers/MGAs."
           },
           {
@@ -512,7 +512,7 @@
               15
             ],
             "details": "Design and implement a monitoring framework to compare AI-detected compliance issues with manual reviews by compliance experts. Create a sampling methodology to select calls for manual review. Develop metrics for measuring accuracy including false positive rate, false negative rate, and overall precision. Implement a feedback loop to improve AI detection based on manual review findings. Create a dashboard to track accuracy metrics over time.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Validate monitoring methodology with compliance and data science teams. Test with a diverse set of calls to ensure representative sampling."
           },
           {
@@ -525,7 +525,7 @@
               15
             ],
             "details": "Develop detailed user documentation explaining the UK compliance features including the 6 compliance dimensions, call type detection, and compliance issue severity. Create administrator documentation covering configuration options and customization capabilities. Include regulatory context and references to relevant FCA, GDPR, and other regulations. Provide examples of compliance issues and recommended remediation actions. Create training materials for compliance officers and call center managers.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Review documentation with compliance experts and end users. Verify accuracy of regulatory references and remediation recommendations."
           }
         ]
@@ -536,7 +536,7 @@
         "description": "Conduct a comprehensive evaluation of leading speaker diarization solutions for insurance sales call QA, comparing accuracy, cost, integration, and compliance, and recommend the best fit for >95% speaker attribution accuracy.",
         "details": "1. **Define Evaluation Criteria:**\n   - Diarization Error Rate (DER) for 2-speaker scenarios (target: >95% attribution accuracy)\n   - Cost structure (per hour/minute, monthly estimate for 100 calls × 8 min)\n   - API integration complexity and compatibility with existing Whisper-based transcription\n   - Processing speed (real-time or batch, latency)\n   - Performance in noisy environments, overlapping speech, and short utterances\n   - Support for UK English accents\n   - Availability of speaker embeddings/voice fingerprints\n   - Deployment options (cloud vs on-premise)\n   - GDPR and UK insurance compliance\n\n2. **Research and Compare Solutions:**\n   - Evaluate AssemblyAI, Deepgram, Speechmatics, Gladia (Whisper+Pyannote), Pyannote Audio, Rev.ai, Azure Speech Services, and others as relevant[1][2][4][9].\n   - Collect latest DER benchmarks, especially for noisy, overlapping, and short-utterance scenarios[1][9].\n   - Document pricing models and estimate monthly costs for projected call volume.\n   - Assess API documentation, SDKs, and ease of integration with current Whisper pipeline (can diarization be added post-transcription, or is full replacement needed?)[1].\n   - Identify which solutions offer speaker embeddings/voice fingerprints and their utility for agent/customer identification.\n   - Review deployment models and compliance certifications (SOC2, GDPR, UK-specific requirements)[1][2][4].\n\n3. **Implementation Feasibility:**\n   - For top 2-3 candidates, outline integration approach: keep Whisper for transcription and add diarization, or replace with all-in-one solution.\n   - Rate implementation complexity (1-5 scale) based on API, SDK, and infrastructure requirements.\n   - Identify risks of speaker misattribution and mitigation strategies (e.g., manual review, confidence thresholds).\n\n4. **Recommendation Report:**\n   - Summarize findings in a comparison table (DER, cost, speed, compliance, integration, deployment, UK accent support).\n   - Recommend the optimal solution with rationale, estimated accuracy improvement over current heuristics, monthly cost, and risk assessment.\n   - Provide a high-level integration plan and next steps for pilot implementation.\n\n**Best practices:**\n- Use recent (2024-2025) benchmarks and vendor documentation.\n- Engage with vendor support for clarifications on compliance and deployment.\n- Consider open-source (Pyannote) for maximum control, but weigh against maintenance and support needs.\n- Ensure all recommendations are defensible for HR/legal review and compliance audits.",
         "testStrategy": "1. Validate that the evaluation covers all required criteria (accuracy, cost, integration, compliance, etc.) for each shortlisted solution.\n2. Confirm that DER and accuracy metrics are sourced from recent (2024-2025) benchmarks and are relevant to 2-speaker, noisy, and short-utterance scenarios.\n3. Review cost calculations for accuracy based on current vendor pricing and projected call volume.\n4. Ensure the recommendation includes a clear rationale, estimated accuracy improvement, cost, implementation complexity, and risk assessment.\n5. Peer review the report for completeness, clarity, and actionable next steps.\n6. Present findings to stakeholders (QA, compliance, engineering) for feedback and sign-off.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           21
         ],
@@ -549,10 +549,25 @@
         "description": "Conduct a comprehensive evaluation of commercial APIs for call center compliance analysis and quality assurance scoring, focusing on insurance/financial services use cases, UK FCA regulations, feature sets, cost, and integration requirements.",
         "details": "1. **Identify and shortlist relevant APIs:** Research leading commercial APIs and platforms specializing in call center compliance and QA scoring, with emphasis on insurance/financial services. Include vendors such as NICE CXone, Verint, CallMiner, Gong.io, Chorus.ai, PCI Pal, Pindrop, Smarsh, and others with proven compliance features for UK FCA regulations and insurance sales calls.\n\n2. **Feature and compliance analysis:** For each shortlisted API, document:\n   - Out-of-the-box compliance scoring for insurance sales calls\n   - UK FCA regulation support (Treating Customers Fairly, disclosure requirements)\n   - Pre-built scorecards for insurance industry\n   - Script adherence, required disclosures, sentiment analysis, risk detection\n   - Support for custom compliance rules and scorecard customization\n   - Data residency options (UK/EU compliance)\n   - REST API availability and integration patterns (batch/real-time transcript scoring)\n\n3. **Cost-benefit analysis:**\n   - Gather pricing for 100 calls/month (8 minutes each) for each API\n   - Compare costs to current Claude Sonnet 4.5 approach ($0.05/call)\n   - Analyze feature trade-offs: accuracy, maintenance effort, regulatory coverage, integration complexity, and scalability\n\n4. **Integration requirements:**\n   - Assess REST API documentation, transcript ingestion workflows, and output formats\n   - Evaluate support for real-time vs batch processing\n   - Review data residency and GDPR compliance guarantees\n\n5. **Comparison document:**\n   - Create a structured comparison table covering all criteria above\n   - Summarize strengths/weaknesses of each solution vs custom Claude prompts\n   - Provide a clear recommendation: stick with custom Claude prompts or switch to a specialized compliance API, with justification based on accuracy, regulatory fit, cost, and maintainability\n\n6. **Best practices:**\n   - Reference recent (2024-2025) industry benchmarks and compliance trends\n   - Ensure all findings are validated against official vendor documentation and user reviews\n   - Highlight any gaps or limitations in available solutions\n\nDeliverable: A comprehensive comparison document (Markdown or Google Doc) suitable for technical and compliance stakeholders, similar in format to the diarization analysis.\n<info added on 2025-11-13T20:02:41.509Z>\n7. **Additional vendors to evaluate:**\n   - **Convin.ai:** Offers AI-powered insurance call audits, compliance scoring, and real-time agent assist with UK regulatory alignment\n   - **Insight7:** Specializes in AI-driven call analytics for insurance with custom QA automation and compliance scoring, including UK regulatory support\n\n8. **Pricing considerations:**\n   - Most commercial vendors require minimum contracts (500-1,000 calls/month)\n   - Enterprise solutions like NICE, Verint, and CallMiner typically charge $1-4 per call for compliance analytics\n   - For small volumes (100 calls/month), Claude Sonnet 4.5 is significantly more cost-effective ($5/month vs $100-600+/month)\n\n9. **Integration patterns:**\n   - Example REST API integration flow for transcript scoring with commercial vendors\n   - Batch processing options for uploading multiple transcripts\n   - Webhook integration for real-time agent assist and compliance alerts\n\n10. **Decision framework:**\n    - Use Claude Sonnet 4.5 for: low call volumes (<500/month), rapid prototyping, flexible non-regulated use cases\n    - Switch to specialized API for: high regulatory risk, scaling to higher volumes, auditability requirements, reduced maintenance effort\n\n11. **Edge cases and pitfalls:**\n    - Claude Sonnet 4.5: Risk of missing subtle regulatory requirements, especially TCF and mandatory disclosures\n    - Commercial APIs: Higher cost, vendor lock-in, minimum contract sizes, potentially higher integration complexity\n</info added on 2025-11-13T20:02:41.509Z>\n<info added on 2025-11-13T20:08:19.951Z>\n12. **Immediate Prototyping Recommendation:**\n    - **Insight7** is the optimal choice for rapid demonstration with UK insurance brokers requiring:\n      - Self-service API access (15-30 minutes from signup to API key)\n      - Direct REST API endpoints for transcript submission and compliance scoring\n      - Built-in FCA/insurance compliance frameworks\n      - Transparent pricing with immediate trial availability\n      - Integration time of 2.5-3.5 hours for a working demo\n    \n    - **Implementation approach:**\n      ```typescript\n      // Sample Next.js integration with Insight7\n      const INSIGHT7_API_URL = 'https://api.insight7.io/v1/compliance/score';\n      const INSIGHT7_API_KEY = process.env.INSIGHT7_API_KEY;\n      \n      export async function getComplianceScore(payload: {\n        transcript: string;\n        agentId: string;\n        callId: string;\n      }) {\n        const response = await axios.post(\n          INSIGHT7_API_URL,\n          payload,\n          {\n            headers: {\n              'Authorization': `Bearer ${INSIGHT7_API_KEY}`,\n              'Content-Type': 'application/json',\n            },\n          }\n        );\n        return response.data;\n      }\n      ```\n    \n    - **Fallback option:** CallMiner (requires 3-6 hours implementation time)\n    \n    - **Comparative analysis:**\n      | Vendor      | API Access | Self-Service | FCA Compliance | REST API | Pricing Transparency | Demo Feasibility |\n      |-------------|------------|--------------|----------------|----------|----------------------|------------------|\n      | **Insight7**| Instant    | Yes          | Yes            | Yes      | Yes                  | Excellent        |\n      | CallMiner   | Hours-Days | Partial      | Yes            | Yes      | Partial              | Good             |\n      | NICE CXone  | Days-Weeks | No           | Yes            | Yes      | No                   | Poor             |\n      | Verint      | Days-Weeks | No           | Yes            | Yes      | No                   | Poor             |\n      | Convin.ai   | Hours-Days | Partial      | Partial        | Yes      | Partial              | Fair             |\n</info added on 2025-11-13T20:08:19.951Z>",
         "testStrategy": "1. Verify that all major commercial compliance/QA APIs relevant to insurance/financial services are included and evaluated.\n2. Confirm that UK FCA compliance features and insurance-specific scorecards are documented for each API.\n3. Validate cost calculations for 100 calls/month and ensure feature/cost comparisons are accurate.\n4. Review integration requirements and confirm REST API support, transcript ingestion, and data residency options are covered.\n5. Ensure the comparison document is clear, comprehensive, and actionable, with a justified recommendation.\n6. Cross-check findings with recent vendor documentation and user reviews for accuracy.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           21,
           22
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 24,
+        "title": "Create Editable Compliance Rules Management System",
+        "description": "Develop an admin interface that allows QA Managers to customize Claude prompts for the 6 UK compliance dimensions, with structured storage and version control.",
+        "details": "1. Create a new admin/settings page in the application:\n   - Design a form-based UI with tabs for each compliance dimension\n   - Use Shadcn/ui components (Tabs, Form, Textarea, Input, etc.)\n   - Include fields for prompt text, descriptions, scoring criteria, examples, and thresholds\n\n2. Design and implement the data model:\n   - Create TypeScript interfaces for ComplianceRule, ComplianceDimension, etc.\n   - Add these to src/types/index.ts\n   - Structure should include: dimension name, prompt text, scoring criteria, examples, references, thresholds, version info\n\n3. Implement backend storage:\n   - Create a JSON file structure to store compliance rules\n   - Implement API routes for CRUD operations:\n     - GET /api/compliance-rules\n     - POST /api/compliance-rules\n     - PUT /api/compliance-rules/:id\n     - DELETE /api/compliance-rules/:id\n\n4. Modify src/lib/claude-service.ts:\n   - Refactor to load compliance rules dynamically from storage\n   - Replace hardcoded prompts with template system\n   - Implement prompt assembly logic that incorporates custom rules\n\n5. Create default templates for all 6 UK compliance dimensions:\n   - Call Opening Compliance\n   - Data Protection Compliance\n   - Mandatory Disclosures\n   - TCF Compliance\n   - Sales Process Compliance\n   - Complaints Handling\n\n6. Implement version control:\n   - Track changes with user, timestamp, and change description\n   - Store version history in the JSON structure\n   - Create UI to view version history\n\n7. Add export/import functionality:\n   - Create download button for JSON export\n   - Implement file upload for importing rule sets\n   - Add validation for imported files\n\n8. Build preview feature:\n   - Create a modal dialog showing the assembled Claude prompt\n   - Add a \"Preview\" button to trigger this view\n   - Format the preview to match actual Claude input",
+        "testStrategy": "1. Unit tests:\n   - Test the compliance rule data model for type correctness\n   - Verify CRUD operations for compliance rules\n   - Test prompt assembly logic with various rule configurations\n\n2. Integration tests:\n   - Test the full flow from UI customization to Claude prompt generation\n   - Verify that changes in the admin interface correctly modify the prompts\n   - Test import/export functionality with various rule sets\n\n3. UI/UX testing:\n   - Verify form validation for all input fields\n   - Test the preview feature with different rule configurations\n   - Check responsive design on different screen sizes\n\n4. Functional testing:\n   - Create a test suite with sample compliance rules\n   - Modify rules and verify they're correctly applied in analysis\n   - Test version control by making changes and reviewing history\n\n5. Edge cases:\n   - Test with extremely long prompt text\n   - Verify behavior when importing invalid JSON\n   - Test concurrent edits by multiple users\n\n6. User acceptance testing:\n   - Have QA Managers test the interface with real-world scenarios\n   - Collect feedback on usability and feature completeness",
+        "status": "pending",
+        "dependencies": [
+          2,
+          10,
+          12
         ],
         "priority": "high",
         "subtasks": []
@@ -560,7 +575,7 @@
     ],
     "metadata": {
       "created": "2025-11-12T14:31:33.704Z",
-      "updated": "2025-11-14T11:01:48.071Z",
+      "updated": "2025-11-14T11:20:18.462Z",
       "description": "Tasks for master context"
     }
   }
